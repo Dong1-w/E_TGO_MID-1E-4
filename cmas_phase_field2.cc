@@ -111,8 +111,8 @@ constexpr double G_TC = 50.0 * 1e-3;        // 0.05 N/mm
 constexpr double sigma_TC = 1000e6 * 1e-6;  // 1000 MPa
 
 // TGO layer
-constexpr double E_TGO_CORRODED = 1e-4;      // MPa (CMAS渗透腐蚀段)
-constexpr double E_TGO_INTACT = 40e9 * 1e-6; // 40 GPa (TGO其余段)
+constexpr double E_TGO_CORRODED = 1e-4;      // MPa (CMAS-corroded middle segment)
+constexpr double E_TGO_INTACT = 40e9 * 1e-6; // 40 GPa (remaining TGO segment)
 constexpr double nu_TGO = 0.12;
 constexpr double G_TGO = 40 * 1e-3;       // Fracture-energy-like parameter (N/mm), not elastic shear modulus
 constexpr double sigma_TGO = 40e6 * 1e-6;   // 40 MPa
