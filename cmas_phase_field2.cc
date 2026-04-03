@@ -111,7 +111,8 @@ constexpr double G_TC = 50.0 * 1e-3;        // 0.05 N/mm
 constexpr double sigma_TC = 1000e6 * 1e-6;  // 1000 MPa
 
 // TGO layer
-constexpr double E_TGO = 1e-4;             // MPa (intentionally very low per full-model setup)
+constexpr double E_TGO_CORRODED = 1e-4;      // MPa (CMAS渗透腐蚀段)
+constexpr double E_TGO_INTACT = 40e9 * 1e-6; // 40 GPa (TGO其余段)
 constexpr double nu_TGO = 0.12;
 constexpr double G_TGO = 40 * 1e-3;       // Fracture-energy-like parameter (N/mm), not elastic shear modulus
 constexpr double sigma_TGO = 40e6 * 1e-6;   // 40 MPa
@@ -194,6 +195,17 @@ else if (y <= Domain::y_tgo_top && y > Domain::y_tgo_bottom) return TGO;
 else return TC;
 }
 
+inline bool is_tgo_cmas_corroded_segment(const Point<2> &p)
+{
+return (p[1] > Domain::y_tgo_bottom && p[1] <= Domain::y_tgo_top &&
+        p[0] >= Domain::x_cmas_min && p[0] <= Domain::x_cmas_max);
+}
+
+inline double get_tgo_E_base(const Point<2> &p)
+{
+return is_tgo_cmas_corroded_segment(p) ? Material::E_TGO_CORRODED : Material::E_TGO_INTACT;
+}
+
 // MODIFIED: Added parameter N for TGO degradation
 double get_E(const Point<2> &p, double phi = 0.0, double n = 0.0, double N = 0.0)
 {
@@ -215,7 +227,7 @@ omega = Nphi / (Dphi);
 }
 break;
 case TGO:
-E_base = Material::E_TGO;
+E_base = get_tgo_E_base(p);
 {
 double b0 = Material::length_scale;
 // MODIFIED: TGO degradation depends on N, not n
@@ -703,7 +715,7 @@ if (cell_center[1] > Domain::y_tc_top - 0.05) in_active_region = false;
 double E, nu, G_c, sigma_c;
 // Initialize basic parameters
 if (layer == TC) { E = Material::E_TC; nu = Material::nu_TC; G_c = Material::G_TC; sigma_c = Material::sigma_TC; in_active_region = false; }
-else if (layer == TGO) { E = Material::E_TGO; nu = Material::nu_TGO; G_c = Material::G_TGO; sigma_c = Material::sigma_TGO; }
+else if (layer == TGO) { E = get_tgo_E_base(cell_center); nu = Material::nu_TGO; G_c = Material::G_TGO; sigma_c = Material::sigma_TGO; }
 else if(layer == BC) {in_active_region = false;}
 else { E = Material::E_BC; nu = Material::nu_BC; G_c = 1.0; sigma_c = 1e3; }
 
@@ -906,7 +918,7 @@ E = Material::E_TC; nu = Material::nu_TC; G_c = Material::G_TC; sigma_c = Materi
 in_active_region = false; 
 }
 else if (layer == TGO) { 
-E = Material::E_TGO; nu = Material::nu_TGO; G_c = Material::G_TGO; sigma_c = Material::sigma_TGO; 
+E = get_tgo_E_base(cell_center); nu = Material::nu_TGO; G_c = Material::G_TGO; sigma_c = Material::sigma_TGO; 
 }
 else if(layer == BC) {
 in_active_region = false;
@@ -1821,7 +1833,7 @@ if (cell_center[1] > Domain::y_tc_top - 0.01) in_active_region = false;
 
 double E, nu, sigma_c;
 if (layer == TC) { E = Material::E_TC; nu = Material::nu_TC; sigma_c = Material::sigma_TC; }
-else if (layer == TGO) { E = Material::E_TGO; nu = Material::nu_TGO; sigma_c = Material::sigma_TGO; }
+else if (layer == TGO) { E = get_tgo_E_base(cell_center); nu = Material::nu_TGO; sigma_c = Material::sigma_TGO; }
 else { E = Material::E_BC; nu = Material::nu_BC; sigma_c = 1e3; }
 double lam = lambda(E, nu);
 double mu_val = mu(E, nu);
