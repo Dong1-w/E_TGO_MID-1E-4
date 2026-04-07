@@ -2118,7 +2118,7 @@ E_modulus_out(cell_idx) = get_layer_base_E(center);
 } else {
 sigma1_out(cell_idx) = 0; sigma2_out(cell_idx) = 0; sigma3_out(cell_idx) = 0;
 sxx_out(cell_idx) = 0; syy_out(cell_idx) = 0; sxy_out(cell_idx) = 0;
-E_modulus_out(cell_idx) = 0;
+E_modulus_out(cell_idx) = -1.0;
 }
 ++cell_idx;
 }
