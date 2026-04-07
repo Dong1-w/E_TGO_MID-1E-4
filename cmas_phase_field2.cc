@@ -238,8 +238,8 @@ case TC:  return Material::E_TC;
 case TGO: return get_tgo_E_base(p);
 case BC:  return Material::E_BC;
 case SUB: return Material::E_SUB;
+default:  return Material::E_TC;
 }
-return Material::E_TC;
 }
 
 // MODIFIED: Added parameter N for TGO degradation
