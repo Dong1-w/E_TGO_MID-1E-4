@@ -1,7 +1,15 @@
 cmake_minimum_required(VERSION 3.16)
 project(cmas_phase_field2 LANGUAGES CXX)
 
-find_package(deal.II 9.3 REQUIRED)
+find_package(deal.II 9.3 QUIET)
+if(NOT deal.II_FOUND)
+  if(EXISTS "/usr/share/cmake/deal.II/deal.IIConfig.cmake")
+    set(deal.II_DIR "/usr/share/cmake/deal.II" CACHE PATH "Path to deal.II config")
+    find_package(deal.II 9.3 REQUIRED)
+  else()
+    message(FATAL_ERROR "deal.II not found. Please set deal.II_DIR or CMAKE_PREFIX_PATH.")
+  endif()
+endif()
 deal_ii_initialize_cached_variables()
 
 add_executable(cmas_phase_field2 cmas_phase_field2.cc)
