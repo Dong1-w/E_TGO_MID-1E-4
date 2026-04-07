@@ -99,6 +99,7 @@ constexpr double y_tc_top = 1.25;      // TC layer top
 // CMAS application region at top boundary
 constexpr double x_cmas_min = 3;    // mm
 constexpr double x_cmas_max = 5;    // mm
+constexpr double tgo_transition_width = 0.5; // mm, smoothing band width on each side of CMAS segment
 }
 
 // Material parameters
@@ -111,7 +112,8 @@ constexpr double G_TC = 50.0 * 1e-3;        // 0.05 N/mm
 constexpr double sigma_TC = 1000e6 * 1e-6;  // 1000 MPa
 
 // TGO layer
-constexpr double E_TGO = 1e-4;             // MPa (intentionally very low per full-model setup)
+constexpr double E_TGO_CORRODED = 1e-4;      // MPa (CMAS-corroded middle segment)
+constexpr double E_TGO_INTACT = 40e9 * 1e-6; // 40 GPa (remaining TGO segment)
 constexpr double nu_TGO = 0.12;
 constexpr double G_TGO = 40 * 1e-3;       // Fracture-energy-like parameter (N/mm), not elastic shear modulus
 constexpr double sigma_TGO = 40e6 * 1e-6;   // 40 MPa
@@ -194,17 +196,62 @@ else if (y <= Domain::y_tgo_top && y > Domain::y_tgo_bottom) return TGO;
 else return TC;
 }
 
+inline double smoothstep(const double t_in)
+{
+const double t = std::max(0.0, std::min(1.0, t_in));
+return t * t * (3.0 - 2.0 * t);
+}
+
+inline double get_tgo_E_base(const Point<2> &p)
+{
+if (!(p[1] > Domain::y_tgo_bottom && p[1] <= Domain::y_tgo_top))
+return Material::E_TGO_INTACT;
+
+const double transition_width = Domain::tgo_transition_width;
+const double x_left_start = Domain::x_cmas_min - transition_width;
+const double x_left_end = Domain::x_cmas_min;
+const double x_right_start = Domain::x_cmas_max;
+const double x_right_end = Domain::x_cmas_max + transition_width;
+
+const double x = p[0];
+if (x <= x_left_start || x >= x_right_end)
+return Material::E_TGO_INTACT;
+
+if (x >= x_left_end && x <= x_right_start)
+return Material::E_TGO_CORRODED;
+
+if (x > x_left_start && x < x_left_end)
+{
+const double t = smoothstep((x - x_left_start) / transition_width);
+return Material::E_TGO_INTACT + (Material::E_TGO_CORRODED - Material::E_TGO_INTACT) * t;
+}
+
+const double t = smoothstep((x - x_right_start) / transition_width);
+return Material::E_TGO_CORRODED + (Material::E_TGO_INTACT - Material::E_TGO_CORRODED) * t;
+}
+
+inline double get_layer_base_E(const Point<2> &p)
+{
+switch (get_layer(p[1]))
+{
+case TC:  return Material::E_TC;
+case TGO: return get_tgo_E_base(p);
+case BC:  return Material::E_BC;
+case SUB: return Material::E_SUB;
+default:  return Material::E_TC;
+}
+}
+
 // MODIFIED: Added parameter N for TGO degradation
 double get_E(const Point<2> &p, double phi = 0.0, double n = 0.0, double N = 0.0)
 {
 MaterialLayer layer = get_layer(p[1]);
-double E_base;
+double E_base = get_layer_base_E(p);
 double omega = 1.0;
 
 switch(layer)
 {
 case TC:
-E_base = Material::E_TC;
 {
 double b0 = Material::length_scale;
 double Kphi = 4.0 * E_base * Material::G_TC / 
@@ -215,7 +262,6 @@ omega = Nphi / (Dphi);
 }
 break;
 case TGO:
-E_base = Material::E_TGO;
 {
 double b0 = Material::length_scale;
 // MODIFIED: TGO degradation depends on N, not n
@@ -236,10 +282,8 @@ omega = Nphi / (Dphi );
 }
 break;
 case BC:
-E_base = Material::E_BC;
 break;
 case SUB:
-E_base = Material::E_SUB;
 break;
 }
 return E_base * omega;
@@ -703,7 +747,7 @@ if (cell_center[1] > Domain::y_tc_top - 0.05) in_active_region = false;
 double E, nu, G_c, sigma_c;
 // Initialize basic parameters
 if (layer == TC) { E = Material::E_TC; nu = Material::nu_TC; G_c = Material::G_TC; sigma_c = Material::sigma_TC; in_active_region = false; }
-else if (layer == TGO) { E = Material::E_TGO; nu = Material::nu_TGO; G_c = Material::G_TGO; sigma_c = Material::sigma_TGO; }
+else if (layer == TGO) { E = get_tgo_E_base(cell_center); nu = Material::nu_TGO; G_c = Material::G_TGO; sigma_c = Material::sigma_TGO; }
 else if(layer == BC) {in_active_region = false;}
 else { E = Material::E_BC; nu = Material::nu_BC; G_c = 1.0; sigma_c = 1e3; }
 
@@ -906,7 +950,7 @@ E = Material::E_TC; nu = Material::nu_TC; G_c = Material::G_TC; sigma_c = Materi
 in_active_region = false; 
 }
 else if (layer == TGO) { 
-E = Material::E_TGO; nu = Material::nu_TGO; G_c = Material::G_TGO; sigma_c = Material::sigma_TGO; 
+E = get_tgo_E_base(cell_center); nu = Material::nu_TGO; G_c = Material::G_TGO; sigma_c = Material::sigma_TGO; 
 }
 else if(layer == BC) {
 in_active_region = false;
@@ -1821,7 +1865,7 @@ if (cell_center[1] > Domain::y_tc_top - 0.01) in_active_region = false;
 
 double E, nu, sigma_c;
 if (layer == TC) { E = Material::E_TC; nu = Material::nu_TC; sigma_c = Material::sigma_TC; }
-else if (layer == TGO) { E = Material::E_TGO; nu = Material::nu_TGO; sigma_c = Material::sigma_TGO; }
+else if (layer == TGO) { E = get_tgo_E_base(cell_center); nu = Material::nu_TGO; sigma_c = Material::sigma_TGO; }
 else { E = Material::E_BC; nu = Material::nu_BC; sigma_c = 1e3; }
 double lam = lambda(E, nu);
 double mu_val = mu(E, nu);
@@ -2057,6 +2101,7 @@ Vector<double> sigma3_out(triangulation.n_active_cells());
 Vector<double> sxx_out(triangulation.n_active_cells());
 Vector<double> syy_out(triangulation.n_active_cells());
 Vector<double> sxy_out(triangulation.n_active_cells());
+Vector<double> E_modulus_out(triangulation.n_active_cells());
 
 cell_idx = 0; unsigned int local_idx = 0;
 for (const auto &cell : triangulation.active_cell_iterators()) {
@@ -2067,10 +2112,13 @@ sigma3_out(cell_idx) = principal_stress_3(local_idx);
 sxx_out(cell_idx) = stress_xx(local_idx);
 syy_out(cell_idx) = stress_yy(local_idx);
 sxy_out(cell_idx) = stress_xy(local_idx);
+const Point<dim> center = cell->center();
+E_modulus_out(cell_idx) = get_layer_base_E(center);
 ++local_idx;
 } else {
 sigma1_out(cell_idx) = 0; sigma2_out(cell_idx) = 0; sigma3_out(cell_idx) = 0;
 sxx_out(cell_idx) = 0; syy_out(cell_idx) = 0; sxy_out(cell_idx) = 0;
+E_modulus_out(cell_idx) = -1.0;
 }
 ++cell_idx;
 }
@@ -2080,6 +2128,7 @@ data_out.add_data_vector(sigma3_out, "sigma3", DataOut<dim>::type_cell_data);
 data_out.add_data_vector(sxx_out, "stress_xx", DataOut<dim>::type_cell_data);
 data_out.add_data_vector(syy_out, "stress_yy", DataOut<dim>::type_cell_data);
 data_out.add_data_vector(sxy_out, "stress_xy", DataOut<dim>::type_cell_data);
+data_out.add_data_vector(E_modulus_out, "E_modulus", DataOut<dim>::type_cell_data);
 
 data_out.build_patches();
 data_out.write_vtu_with_pvtu_record("./", "solution", step, mpi_communicator, 2, 0);
