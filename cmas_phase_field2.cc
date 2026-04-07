@@ -99,6 +99,7 @@ constexpr double y_tc_top = 1.25;      // TC layer top
 // CMAS application region at top boundary
 constexpr double x_cmas_min = 3;    // mm
 constexpr double x_cmas_max = 5;    // mm
+constexpr double tgo_transition_width = 0.5; // mm, smoothing band width on each side of CMAS segment
 }
 
 // Material parameters
@@ -195,12 +196,6 @@ else if (y <= Domain::y_tgo_top && y > Domain::y_tgo_bottom) return TGO;
 else return TC;
 }
 
-inline bool is_tgo_cmas_corroded_segment(const Point<2> &p)
-{
-return (p[1] > Domain::y_tgo_bottom && p[1] <= Domain::y_tgo_top &&
-        p[0] >= Domain::x_cmas_min && p[0] <= Domain::x_cmas_max);
-}
-
 inline double smoothstep(const double t_in)
 {
 const double t = std::max(0.0, std::min(1.0, t_in));
@@ -212,7 +207,7 @@ inline double get_tgo_E_base(const Point<2> &p)
 if (!(p[1] > Domain::y_tgo_bottom && p[1] <= Domain::y_tgo_top))
 return Material::E_TGO_INTACT;
 
-constexpr double transition_width = 0.5; // mm, smoothing band width on each side
+const double transition_width = Domain::tgo_transition_width;
 const double x_left_start = Domain::x_cmas_min - transition_width;
 const double x_left_end = Domain::x_cmas_min;
 const double x_right_start = Domain::x_cmas_max;
