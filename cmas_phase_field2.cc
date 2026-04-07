@@ -230,17 +230,28 @@ const double t = smoothstep((x - x_right_start) / transition_width);
 return Material::E_TGO_CORRODED + (Material::E_TGO_INTACT - Material::E_TGO_CORRODED) * t;
 }
 
+inline double get_layer_base_E(const Point<2> &p)
+{
+switch (get_layer(p[1]))
+{
+case TC:  return Material::E_TC;
+case TGO: return get_tgo_E_base(p);
+case BC:  return Material::E_BC;
+case SUB: return Material::E_SUB;
+}
+return Material::E_TC;
+}
+
 // MODIFIED: Added parameter N for TGO degradation
 double get_E(const Point<2> &p, double phi = 0.0, double n = 0.0, double N = 0.0)
 {
 MaterialLayer layer = get_layer(p[1]);
-double E_base;
+double E_base = get_layer_base_E(p);
 double omega = 1.0;
 
 switch(layer)
 {
 case TC:
-E_base = Material::E_TC;
 {
 double b0 = Material::length_scale;
 double Kphi = 4.0 * E_base * Material::G_TC / 
@@ -251,7 +262,6 @@ omega = Nphi / (Dphi);
 }
 break;
 case TGO:
-E_base = get_tgo_E_base(p);
 {
 double b0 = Material::length_scale;
 // MODIFIED: TGO degradation depends on N, not n
@@ -272,10 +282,8 @@ omega = Nphi / (Dphi );
 }
 break;
 case BC:
-E_base = Material::E_BC;
 break;
 case SUB:
-E_base = Material::E_SUB;
 break;
 }
 return E_base * omega;
@@ -2105,15 +2113,7 @@ sxx_out(cell_idx) = stress_xx(local_idx);
 syy_out(cell_idx) = stress_yy(local_idx);
 sxy_out(cell_idx) = stress_xy(local_idx);
 const Point<dim> center = cell->center();
-const MaterialLayer layer = get_layer(center[1]);
-if (layer == TGO)
-E_modulus_out(cell_idx) = get_tgo_E_base(center);
-else if (layer == TC)
-E_modulus_out(cell_idx) = Material::E_TC;
-else if (layer == BC)
-E_modulus_out(cell_idx) = Material::E_BC;
-else
-E_modulus_out(cell_idx) = Material::E_SUB;
+E_modulus_out(cell_idx) = get_layer_base_E(center);
 ++local_idx;
 } else {
 sigma1_out(cell_idx) = 0; sigma2_out(cell_idx) = 0; sigma3_out(cell_idx) = 0;
